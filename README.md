@@ -1,32 +1,16 @@
-# MatekWebApp
+# React + Vite
 
-**Adaptív Matekgyakorló Rendszer** (Adaptive Math Practice System)
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-This is a BSc thesis project aimed at creating an interactive web application for 5th-grade students to practice
-mathematics.
+Currently, two official plugins are available:
 
-## Project Overview
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-* **Topic Owner:** Lénárt Anett
-* **Developer:** Kovács Mihály (Q2776E)
-* **Tech Stack:** React, Node.js/Express, SQLite, Tailwind CSS, shadcn/ui
+## React Compiler
 
-## Setup & Installation
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-1. **Install dependencies:**
-   ```bash
-   npm install
-   ```
+## Expanding the ESLint configuration
 
-2. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
-## Documentation
-
-Detailed plans and specifications can be found in the `plans/` directory:
-
-* [Project Kickoff](plans/Kickoff_Lénárt%20Anett_5_Q2776E_MatekWebApp.md)
-* [Technical Specification](plans/Technical%20Specification_Lénárt%20Anett_5_Q2776E_MatekWebApp.md)
-* [Setup Guide](plans/Idea1.md)
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
