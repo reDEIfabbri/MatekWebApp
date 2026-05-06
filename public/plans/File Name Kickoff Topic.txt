@@ -1,0 +1,26 @@
+File Name: Kickoff_<Topic leader>_<Task number>_<Student Neptun>_<Task title>
+
+csw
+2*5=?;10
+2*5=?;10
+2*5=?;10
+
+A tanárnőnek is küldjem el.
+
+word wall, bólyai, zrínyi, https://rapidplay.hu/, https://poki.com/hu/matekos, https://poki.com/hu/g/arithmetica, https://www.okosdoboz.hu/feladatsor?id=2258, 
+
+cél lenne, hogy akárhol használhassa a  gyerek (Web-App!), nem lenne feltétlen tanárhozkötve, de lehessen a tanárnak megfigyelni a diákjait
+
+cél lenne a matematika megszerettetése a diákokkal első sorban, lehessen tovább lépni ha nem megy a feladat
+
+admin felület része
+művelet beírás, 
+szöveges feladatok
+kedves emlékeztetők, streak, xp, életpont
+
+timeline: a tervezés és a fejlesztés is beleértve, market research, stb
+
+local host ban fejlesszek, de keresni lehet  felhő
+
+5-ös höz: 
+tervek is jöhetnek, felületek is, pl.: admin vs. felasználói felületek, adatbázisok,
