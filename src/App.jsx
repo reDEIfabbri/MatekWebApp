@@ -1,66 +1,55 @@
-import { useState, useEffect } from 'react';
-import RegisterForm from './components/RegisterForm';
-import LoginForm from './components/LoginForm';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import LoginPage from './pages/LoginPage';
+import RegistrationPage from './pages/RegistrationPage';
 import AdminDashboard from './components/AdminDashboard';
-import './App.css';
-import { Button } from "@/components/ui/button"
+import StudentDashboard from './pages/StudentDashboard';
+
+// A protected route that checks for authentication
+const ProtectedRoute = ({ children, role }) => {
+  const token = localStorage.getItem('token');
+  const userRole = localStorage.getItem('role');
+
+  if (!token) {
+    return <Navigate to="/login" />;
+  }
+
+  if (role && role !== userRole) {
+    // If a role is required and the user doesn't have it, redirect
+    return <Navigate to="/" />;
+  }
+
+  return children;
+};
 
 function App() {
-  const [isLogin, setIsLogin] = useState(true);
-  const [loggedInRole, setLoggedInRole] = useState(null);
-
-  useEffect(() => {
-    const role = localStorage.getItem('role');
-    if (role) {
-      setLoggedInRole(role);
-    }
-  }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('role');
-    setLoggedInRole(null);
-  };
-
-  if (loggedInRole === 'ADMIN') {
-    return (
-      <div className="App">
-        <AdminDashboard />
-        <Button onClick={handleLogout} className="absolute top-4 right-4">Logout</Button>
-      </div>
-    );
-  }
-
-  if (loggedInRole === 'STUDENT') {
-    return (
-      <div className="App p-6">
-        <h1 className="text-2xl">Student Dashboard (Placeholder)</h1>
-        <Button onClick={handleLogout} className="mt-4">Logout</Button>
-      </div>
-    );
-  }
-
-  // If not logged in
   return (
-    <div className="App min-h-screen bg-gray-100 flex flex-col items-center justify-center">
-      <div className="mb-4">
-        <Button 
-          variant={isLogin ? "default" : "outline"} 
-          onClick={() => setIsLogin(true)}
-          className="mr-2"
-        >
-          Login
-        </Button>
-        <Button 
-          variant={!isLogin ? "default" : "outline"} 
-          onClick={() => setIsLogin(false)}
-        >
-          Register
-        </Button>
-      </div>
-      
-      {isLogin ? <LoginForm /> : <RegisterForm />}
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegistrationPage />} />
+
+        {/* Protected Routes */}
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute role="ADMIN">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute role="STUDENT">
+              <StudentDashboard />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Default route */}
+        <Route path="/" element={<Navigate to="/login" />} />
+      </Routes>
+    </Router>
   );
 }
 
