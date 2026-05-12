@@ -31,7 +31,7 @@ router.post('/auth/register', async (req, res) => {
         [email, hashedPassword, userRole]
     );
     if (userRole === 'STUDENT') {
-      await db.run('INSERT INTO USER_GLOBAL_STATS (user_id, lives, current_streak) VALUES (?, 3, 0)', [result.lastID]);
+      await db.run('INSERT INTO USER_GLOBAL_STATS (user_id, lives, current_streak, total_problems_solved, correct_answers) VALUES (?, 3, 0, 0, 0)', [result.lastID]);
     }
     res.status(201).json({ message: 'User created', userId: result.lastID });
   } catch (error) {
@@ -100,15 +100,57 @@ router.post('/admin/tasks', authenticateToken, async (req, res) => {
 // Problems Routes
 router.get('/problems', authenticateToken, async (req, res) => {
     if (req.user.role !== 'STUDENT') return res.sendStatus(403);
+    const { topicId } = req.query;
+    if (!topicId) return res.status(400).json({ error: 'topicId is required' });
+
     try {
         const db = await dbPromise;
-        const { topicId } = req.query;
-        let problems;
-        if (topicId) {
-          problems = await db.all('SELECT task_id, topic_id, difficulty, task_type, task_text, choices FROM TASKS WHERE topic_id = ?', [topicId]);
-        } else {
-          problems = await db.all('SELECT task_id, topic_id, difficulty, task_type, task_text, choices FROM TASKS');
+        const userId = req.user.userId;
+
+        // Get all distinct difficulties for the topic, sorted
+        const difficulties = await db.all(
+            'SELECT DISTINCT difficulty FROM TASKS WHERE topic_id = ? ORDER BY difficulty ASC',
+            [topicId]
+        );
+
+        let unlockedDifficulty = difficulties.length > 0 ? difficulties[0].difficulty : null;
+
+        for (let i = 0; i < difficulties.length - 1; i++) {
+            const currentDiff = difficulties[i].difficulty;
+            const nextDiff = difficulties[i + 1].difficulty;
+
+            const stats = await db.get(
+                'SELECT attempts, correct_answers FROM USER_DIFFICULTY_STATS WHERE user_id = ? AND topic_id = ? AND difficulty = ?',
+                [userId, topicId, currentDiff]
+            );
+
+            if (stats && stats.attempts > 0) {
+                const successRate = stats.correct_answers / stats.attempts;
+                if (successRate >= 0.85) {
+                    unlockedDifficulty = nextDiff; // Unlock the next level
+                } else {
+                    break; // Stop if the current level isn't passed
+                }
+            } else {
+                break; // Stop if no attempts have been made on the current level
+            }
         }
+        
+        // If the very first level has no stats, it should still be unlocked
+        if (unlockedDifficulty === null && difficulties.length > 0) {
+            unlockedDifficulty = difficulties[0].difficulty;
+        }
+
+        if (unlockedDifficulty === null) {
+            return res.json([]); // No problems available or no difficulties defined
+        }
+
+        // Fetch problems for the highest unlocked difficulty
+        const problems = await db.all(
+            'SELECT task_id, topic_id, difficulty, task_type, task_text, choices FROM TASKS WHERE topic_id = ? AND difficulty = ?',
+            [topicId, unlockedDifficulty]
+        );
+
         res.json(problems);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -118,17 +160,41 @@ router.get('/problems', authenticateToken, async (req, res) => {
 router.post('/problems/submit', authenticateToken, async (req, res) => {
     if (req.user.role !== 'STUDENT') return res.sendStatus(403);
     const { taskId, answer } = req.body;
+    const userId = req.user.userId;
+
     try {
         const db = await dbPromise;
-        const task = await db.get('SELECT correct_answer FROM TASKS WHERE task_id = ?', [taskId]);
+        const task = await db.get('SELECT topic_id, difficulty, correct_answer FROM TASKS WHERE task_id = ?', [taskId]);
         if (!task) return res.status(404).json({ error: 'Task not found' });
         
-        const isCorrect = task.correct_answer.trim() === answer.trim();
+        const isCorrect = task.correct_answer.trim().toLowerCase() === answer.trim().toLowerCase();
 
+        // Update global stats (streak/lives/total/correct)
         if (isCorrect) {
-          await db.run('UPDATE USER_GLOBAL_STATS SET current_streak = current_streak + 1 WHERE user_id = ?', [req.user.userId]);
+          await db.run('UPDATE USER_GLOBAL_STATS SET current_streak = current_streak + 1, total_problems_solved = total_problems_solved + 1, correct_answers = correct_answers + 1 WHERE user_id = ?', [userId]);
         } else {
-          await db.run('UPDATE USER_GLOBAL_STATS SET current_streak = 0, lives = MAX(0, lives - 1) WHERE user_id = ?', [req.user.userId]);
+          await db.run('UPDATE USER_GLOBAL_STATS SET current_streak = 0, lives = MAX(0, lives - 1), total_problems_solved = total_problems_solved + 1 WHERE user_id = ?', [userId]);
+        }
+
+        // Update difficulty-specific stats
+        const { topic_id, difficulty } = task;
+        const stat = await db.get(
+            'SELECT stat_id FROM USER_DIFFICULTY_STATS WHERE user_id = ? AND topic_id = ? AND difficulty = ?',
+            [userId, topic_id, difficulty]
+        );
+
+        if (stat) {
+            const correctIncrement = isCorrect ? 1 : 0;
+            await db.run(
+                'UPDATE USER_DIFFICULTY_STATS SET attempts = attempts + 1, correct_answers = correct_answers + ? WHERE stat_id = ?',
+                [correctIncrement, stat.stat_id]
+            );
+        } else {
+            const correctAnswers = isCorrect ? 1 : 0;
+            await db.run(
+                'INSERT INTO USER_DIFFICULTY_STATS (user_id, topic_id, difficulty, attempts, correct_answers) VALUES (?, ?, ?, 1, ?)',
+                [userId, topic_id, difficulty, correctAnswers]
+            );
         }
         
         res.json({ correct: isCorrect });
@@ -145,7 +211,7 @@ router.get('/users/:userId/progress', authenticateToken, async (req, res) => {
 
   try {
       const db = await dbPromise;
-      const stats = await db.get('SELECT lives, current_streak FROM USER_GLOBAL_STATS WHERE user_id = ?', [req.params.userId]);
+      const stats = await db.get('SELECT lives, current_streak, total_problems_solved, correct_answers FROM USER_GLOBAL_STATS WHERE user_id = ?', [req.params.userId]);
       
       if (!stats) return res.status(404).json({ error: 'Progress not found' });
       
@@ -155,5 +221,53 @@ router.get('/users/:userId/progress', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin Statistics Routes
+router.get('/admin/stats/global', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'ADMIN') return res.sendStatus(403);
+    try {
+        const db = await dbPromise;
+        const totalUsers = await db.get('SELECT COUNT(*) as count FROM USERS WHERE role = "STUDENT"');
+        const totalTasks = await db.get('SELECT COUNT(*) as count FROM TASKS');
+        const overallStats = await db.get(`
+            SELECT 
+                SUM(total_problems_solved) as total_solved, 
+                SUM(correct_answers) as total_correct 
+            FROM USER_GLOBAL_STATS
+        `);
+
+        res.json({
+            total_users: totalUsers.count,
+            total_tasks: totalTasks.count,
+            total_problems_solved: overallStats.total_solved || 0,
+            overall_accuracy: (overallStats.total_correct / overallStats.total_solved) || 0
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.get('/admin/stats/task-specific', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'ADMIN') return res.sendStatus(403);
+    try {
+        const db = await dbPromise;
+        const taskStats = await db.all(`
+            SELECT 
+                t.task_id,
+                t.task_text,
+                tp.name as topic_name,
+                SUM(uds.attempts) as total_attempts,
+                SUM(uds.correct_answers) as total_correct
+            FROM TASKS t
+            JOIN TOPICS tp ON t.topic_id = tp.topic_id
+            LEFT JOIN USER_DIFFICULTY_STATS uds ON t.topic_id = uds.topic_id AND t.difficulty = uds.difficulty
+            GROUP BY t.task_id
+            ORDER BY total_attempts DESC
+            LIMIT 20
+        `);
+        res.json(taskStats);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 export default router;

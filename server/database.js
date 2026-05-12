@@ -43,11 +43,25 @@ async function initializeDatabase() {
       FOREIGN KEY (topic_id) REFERENCES TOPICS(topic_id)
     );
 
+    CREATE TABLE IF NOT EXISTS USER_DIFFICULTY_STATS (
+      stat_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      topic_id INTEGER,
+      difficulty REAL,
+      attempts INTEGER DEFAULT 0,
+      correct_answers INTEGER DEFAULT 0,
+      UNIQUE(user_id, topic_id, difficulty),
+      FOREIGN KEY (user_id) REFERENCES USERS(user_id),
+      FOREIGN KEY (topic_id) REFERENCES TOPICS(topic_id)
+    );
+
     CREATE TABLE IF NOT EXISTS USER_GLOBAL_STATS (
       global_id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
       lives INTEGER,
       current_streak INTEGER,
+      total_problems_solved INTEGER DEFAULT 0,
+      correct_answers INTEGER DEFAULT 0,
       FOREIGN KEY (user_id) REFERENCES USERS(user_id)
     );
   `);
@@ -68,6 +82,24 @@ async function initializeDatabase() {
   try {
     await db.exec(`ALTER TABLE TASKS ADD COLUMN choices TEXT;`);
     console.log('Migrated TASKS table: added choices column.');
+  } catch (err) {
+    if (!err.message.includes('duplicate column name')) {
+      console.error('Migration error:', err.message);
+    }
+  }
+
+  // Migration: Add total_problems_solved and correct_answers to USER_GLOBAL_STATS
+  try {
+    await db.exec(`ALTER TABLE USER_GLOBAL_STATS ADD COLUMN total_problems_solved INTEGER DEFAULT 0;`);
+    console.log('Migrated USER_GLOBAL_STATS table: added total_problems_solved column.');
+  } catch (err) {
+    if (!err.message.includes('duplicate column name')) {
+      console.error('Migration error:', err.message);
+    }
+  }
+  try {
+    await db.exec(`ALTER TABLE USER_GLOBAL_STATS ADD COLUMN correct_answers INTEGER DEFAULT 0;`);
+    console.log('Migrated USER_GLOBAL_STATS table: added correct_answers column.');
   } catch (err) {
     if (!err.message.includes('duplicate column name')) {
       console.error('Migration error:', err.message);

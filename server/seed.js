@@ -19,7 +19,7 @@ const topics = [
   "Szöveges feladatok szimpla",
   "Szöveges feladatok komlpex",
   "Alap dimenziók",
-  "Származtatott mértékegységek",
+  "Származtat mértékegységek",
   "Törtek értelmezése",
   "Törtek összeadása, kivonása",
   "Törtek szorzása, osztása",
@@ -34,43 +34,41 @@ const topics = [
   "Tér geometriai 3D-s számítások"
 ];
 
-const sampleTasks = [
-  {
-    topicName: "Fejszámolás alapműveletekkel",
-    difficulty: 1.0,
-    taskType: 'TEXT_ANSWER',
-    taskText: "Mennyi 12 + 15?",
-    correctAnswer: "27"
-  },
-  {
-    topicName: "Fejszámolás alapműveletekkel",
-    difficulty: 1.5,
-    taskType: 'TEXT_ANSWER',
-    taskText: "Számold ki: 8 * 7",
-    correctAnswer: "56"
-  },
-  {
-    topicName: "Számrendszerek",
-    difficulty: 2.0,
-    taskType: 'TEXT_ANSWER',
-    taskText: "Írd át 10-es számrendszerbe a 1010 kettes számrendszerbeli számot!",
-    correctAnswer: "10"
-  },
-  {
-    topicName: "Nyitot mondatok",
-    difficulty: 2.5,
-    taskType: 'TEXT_ANSWER',
-    taskText: "Oldd meg az egyenletet: 2x + 5 = 15",
-    correctAnswer: "5"
-  },
-  {
-    topicName: "Törtek összeadása, kivonása",
-    difficulty: 3.0,
-    taskType: 'TEXT_ANSWER',
-    taskText: "Mennyi 1/2 + 1/4? (Kérlek egyszerűsített formában add meg, pl. 3/4)",
-    correctAnswer: "3/4"
-  }
-];
+function generateSampleTasks(topicName) {
+    const tasks = [];
+    const difficulties = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0];
+    
+    difficulties.forEach((diff, index) => {
+        let taskText = "";
+        let correctAnswer = "";
+        
+        const a = Math.floor(diff) * 3;
+        const b = index + 2;
+
+        if (topicName.includes("Törtek")) {
+            taskText = `\\frac{${a}}{${b}} + \\frac{1}{${b}}`;
+            correctAnswer = `${a + 1}/${b}`;
+        } else if (topicName.includes("Nyitot") || topicName.includes("egyenlet")) {
+            taskText = `${a}x + ${b} = ${a * 2 + b}`;
+            correctAnswer = `2`;
+        } else if (topicName.includes("Szorzás") || topicName.includes("osztás")) {
+            taskText = `${a} \\times ${b}`;
+            correctAnswer = `${a * b}`;
+        } else {
+            taskText = `${a} + ${b}`;
+            correctAnswer = `${a + b}`;
+        }
+
+        tasks.push({
+            topicName: topicName,
+            difficulty: diff,
+            taskType: 'TEXT_ANSWER',
+            taskText: taskText,
+            correctAnswer: correctAnswer
+        });
+    });
+    return tasks;
+}
 
 const defaultUsers = [
   { email: 'admin@matek.test', password: 'password', role: 'ADMIN' },
@@ -78,9 +76,12 @@ const defaultUsers = [
 ];
 
 async function seed() {
-  // Always run initializeDatabase first to ensure schema changes (like adding task_type) are applied
   console.log('Initializing database schema...');
   const db = await initializeDatabase();
+
+  console.log('Clearing existing tasks for clean re-seed...');
+  await db.run('DELETE FROM TASKS');
+  await db.run('DELETE FROM USER_DIFFICULTY_STATS');
 
   console.log('Seeding default users...');
   for (const user of defaultUsers) {
@@ -93,23 +94,18 @@ async function seed() {
           [user.email, hashedPassword, user.role]
         );
         if (user.role === 'STUDENT') {
-          await db.run('INSERT INTO USER_GLOBAL_STATS (user_id, lives, current_streak) VALUES (?, 3, 0)', [result.lastID]);
+          await db.run('INSERT INTO USER_GLOBAL_STATS (user_id, lives, current_streak, total_problems_solved, correct_answers) VALUES (?, 3, 0, 0, 0)', [result.lastID]);
         }
-        console.log(`Inserted default user: ${user.email} (password: ${user.password})`);
-      } else {
-        console.log(`Skipped user (exists): ${user.email}`);
+        console.log(`Inserted default user: ${user.email}`);
       }
     } catch (err) {
       console.error(`Error inserting user ${user.email}:`, err);
     }
   }
 
-
   console.log('Seeding topics...');
-
   for (const topic of topics) {
     try {
-      // Check if exists first to avoid duplicates if run multiple times
       const exists = await db.get('SELECT topic_id FROM TOPICS WHERE name = ?', [topic]);
       if (!exists) {
         await db.run('INSERT INTO TOPICS (name) VALUES (?)', [topic]);
@@ -120,33 +116,23 @@ async function seed() {
     }
   }
 
-  console.log('Seeding sample tasks...');
-
-  for (const task of sampleTasks) {
-    try {
-       // Find the topic ID
-       const topicRow = await db.get('SELECT topic_id FROM TOPICS WHERE name = ?', [task.topicName]);
-       if (topicRow) {
-           const topicId = topicRow.topic_id;
-           
-           // Check if task exists to prevent duplicates
-           const taskExists = await db.get('SELECT task_id FROM TASKS WHERE task_text = ?', [task.taskText]);
-           
-           if (!taskExists) {
+  console.log('Seeding sample tasks for all topics and difficulties...');
+  for (const topic of topics) {
+      const tasksToInsert = generateSampleTasks(topic);
+      for (const task of tasksToInsert) {
+        try {
+           const topicRow = await db.get('SELECT topic_id FROM TOPICS WHERE name = ?', [task.topicName]);
+           if (topicRow) {
+               const topicId = topicRow.topic_id;
                await db.run(
                    'INSERT INTO TASKS (topic_id, difficulty, task_type, task_text, correct_answer) VALUES (?, ?, ?, ?, ?)',
                    [topicId, task.difficulty, task.taskType, task.taskText, task.correctAnswer]
                );
-               console.log(`Inserted task: ${task.taskText}`);
-           } else {
-               console.log(`Skipped task (exists): ${task.taskText}`);
            }
-       } else {
-           console.error(`Could not find topic ID for: ${task.topicName}`);
-       }
-    } catch(err) {
-        console.error(`Error inserting task: ${task.taskText}`, err);
-    }
+        } catch(err) {
+            console.error(`Error inserting task: ${task.taskText}`, err);
+        }
+      }
   }
 
   console.log('Seeding complete.');

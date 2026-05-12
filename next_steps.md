@@ -9,7 +9,7 @@
         * GET /api/users/:userId/progress to track user scores or progress. **(Completed)**
 3. Build the Main User Interface:
     * Create a main dashboard or workspace for logged-in users. **(Completed)**
-    * Use your Radix UI components (DropdownMenu, Tabs, Checkbox, etc.) to build out a clean and functional user interface for navigating problems, viewing results, and managing account settings. **(In Progress)**
+    * Use your Radix UI components (DropdownMenu, Tabs, Checkbox, etc.) to build out a clean and functional user interface for navigating problems, viewing results, and managing account settings. **(Completed)**
 4. Refine and Expand:
-    * Database: As you add features, update your database schema in database.js to store more complex data (e.g., different types of math problems, user statistics).
-    * Testing: Write tests for your backend API routes to ensure they are reliable.
+    * Database: As you add features, update your database schema in database.js to store more complex data (e.g., different types of math problems, user statistics). **(Completed)**
+    * Testing: Write tests for your backend API routes to ensure they are reliable. **(In Progress)**
