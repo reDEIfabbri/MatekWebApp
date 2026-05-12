@@ -1,5 +1,6 @@
 import sqlite3 from 'sqlite3';
 import { open } from 'sqlite';
+import bcrypt from 'bcrypt';
 import { initializeDatabase } from './database.js';
 
 const topics = [
@@ -71,10 +72,38 @@ const sampleTasks = [
   }
 ];
 
+const defaultUsers = [
+  { email: 'admin@matek.test', password: 'password', role: 'ADMIN' },
+  { email: 'student@matek.test', password: 'password', role: 'STUDENT' }
+];
+
 async function seed() {
   // Always run initializeDatabase first to ensure schema changes (like adding task_type) are applied
   console.log('Initializing database schema...');
   const db = await initializeDatabase();
+
+  console.log('Seeding default users...');
+  for (const user of defaultUsers) {
+    try {
+      const exists = await db.get('SELECT user_id FROM USERS WHERE email = ?', [user.email]);
+      if (!exists) {
+        const hashedPassword = await bcrypt.hash(user.password, 10);
+        const result = await db.run(
+          'INSERT INTO USERS (email, password_hash, role) VALUES (?, ?, ?)',
+          [user.email, hashedPassword, user.role]
+        );
+        if (user.role === 'STUDENT') {
+          await db.run('INSERT INTO USER_GLOBAL_STATS (user_id, lives, current_streak) VALUES (?, 3, 0)', [result.lastID]);
+        }
+        console.log(`Inserted default user: ${user.email} (password: ${user.password})`);
+      } else {
+        console.log(`Skipped user (exists): ${user.email}`);
+      }
+    } catch (err) {
+      console.error(`Error inserting user ${user.email}:`, err);
+    }
+  }
+
 
   console.log('Seeding topics...');
 

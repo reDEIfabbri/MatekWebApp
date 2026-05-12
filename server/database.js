@@ -54,10 +54,24 @@ async function initializeDatabase() {
 
   // Migration: Add task_type column if the table was created before it was added to the schema
   try {
+    // Sqlite doesn't support IF NOT EXISTS in ALTER TABLE add column easily, so we just catch the error
+    // if the column already exists
     await db.exec(`ALTER TABLE TASKS ADD COLUMN task_type TEXT CHECK(task_type IN ('SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'TEXT_ANSWER')) NOT NULL DEFAULT 'TEXT_ANSWER';`);
     console.log('Migrated TASKS table: added task_type column.');
   } catch (err) {
-    // This error will safely trigger if the column already exists, which is expected behavior for this rudimentary migration.
+    if (!err.message.includes('duplicate column name')) {
+      console.error('Migration error:', err.message);
+    }
+  }
+  
+  // Migration: Add choices column if the table was created before it was added to the schema
+  try {
+    await db.exec(`ALTER TABLE TASKS ADD COLUMN choices TEXT;`);
+    console.log('Migrated TASKS table: added choices column.');
+  } catch (err) {
+    if (!err.message.includes('duplicate column name')) {
+      console.error('Migration error:', err.message);
+    }
   }
 
   console.log('Database initialized successfully.');

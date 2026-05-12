@@ -83,8 +83,6 @@ router.post('/topics', authenticateToken, async (req, res) => {
 // Admin Task Routes
 router.post('/admin/tasks', authenticateToken, async (req, res) => {
   if (req.user.role !== 'ADMIN') return res.sendStatus(403);
-  // default task_type to 'TEXT_ANSWER' as currently admin dashboard seems to omit it or needs a fallback.
-  // Ideally, the admin page sends 'taskType' but we'll use a fallback here for robust schema match.
   const { topicId, difficulty, taskType = 'TEXT_ANSWER', taskText, correctAnswer } = req.body;
   try {
     const db = await dbPromise;
@@ -104,8 +102,13 @@ router.get('/problems', authenticateToken, async (req, res) => {
     if (req.user.role !== 'STUDENT') return res.sendStatus(403);
     try {
         const db = await dbPromise;
-        // In a real app, this should fetch problems based on user stats or topic selection
-        const problems = await db.all('SELECT task_id, topic_id, difficulty, task_type, task_text, choices FROM TASKS');
+        const { topicId } = req.query;
+        let problems;
+        if (topicId) {
+          problems = await db.all('SELECT task_id, topic_id, difficulty, task_type, task_text, choices FROM TASKS WHERE topic_id = ?', [topicId]);
+        } else {
+          problems = await db.all('SELECT task_id, topic_id, difficulty, task_type, task_text, choices FROM TASKS');
+        }
         res.json(problems);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -120,16 +123,11 @@ router.post('/problems/submit', authenticateToken, async (req, res) => {
         const task = await db.get('SELECT correct_answer FROM TASKS WHERE task_id = ?', [taskId]);
         if (!task) return res.status(404).json({ error: 'Task not found' });
         
-        // Very basic string comparison for answer validation.
-        // For math equations, this should ideally use a math parsing library.
         const isCorrect = task.correct_answer.trim() === answer.trim();
 
-        // Update user stats
         if (isCorrect) {
-          // Increase streak
           await db.run('UPDATE USER_GLOBAL_STATS SET current_streak = current_streak + 1 WHERE user_id = ?', [req.user.userId]);
         } else {
-           // Reset streak, decrease lives (with min 0 boundary)
           await db.run('UPDATE USER_GLOBAL_STATS SET current_streak = 0, lives = MAX(0, lives - 1) WHERE user_id = ?', [req.user.userId]);
         }
         
@@ -141,7 +139,6 @@ router.post('/problems/submit', authenticateToken, async (req, res) => {
 
 // User Progress Route
 router.get('/users/:userId/progress', authenticateToken, async (req, res) => {
-  // Allow user to view their own progress, or an admin to view any progress
   if (req.user.role !== 'ADMIN' && req.user.userId !== parseInt(req.params.userId)) {
       return res.sendStatus(403);
   }
