@@ -57,6 +57,35 @@ router.post('/auth/login', async (req, res) => {
   }
 });
 
+// User Account Routes
+router.get('/users/:userId', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'ADMIN' && req.user.userId !== parseInt(req.params.userId)) {
+      return res.sendStatus(403);
+  }
+  try {
+      const db = await dbPromise;
+      const user = await db.get('SELECT user_id, email, role, username FROM USERS WHERE user_id = ?', [req.params.userId]);
+      if (!user) return res.status(404).json({ error: 'User not found' });
+      res.json(user);
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/users/:userId', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'ADMIN' && req.user.userId !== parseInt(req.params.userId)) {
+      return res.sendStatus(403);
+  }
+  const { username } = req.body;
+  try {
+      const db = await dbPromise;
+      await db.run('UPDATE USERS SET username = ? WHERE user_id = ?', [username, req.params.userId]);
+      res.json({ message: 'User updated successfully' });
+  } catch (error) {
+      res.status(500).json({ error: error.message });
+  }
+});
+
 // Topic Routes
 router.get('/topics', authenticateToken, async (req, res) => {
   try {
@@ -83,12 +112,12 @@ router.post('/topics', authenticateToken, async (req, res) => {
 // Admin Task Routes
 router.post('/admin/tasks', authenticateToken, async (req, res) => {
   if (req.user.role !== 'ADMIN') return res.sendStatus(403);
-  const { topicId, difficulty, taskType = 'TEXT_ANSWER', taskText, correctAnswer } = req.body;
+  const { topicId, difficulty, taskType = 'TEXT_ANSWER', taskText, choices, correctAnswer } = req.body;
   try {
     const db = await dbPromise;
     const result = await db.run(
-        'INSERT INTO TASKS (topic_id, difficulty, task_type, task_text, correct_answer) VALUES (?, ?, ?, ?, ?)',
-        [topicId, difficulty, taskType, taskText, correctAnswer]
+        'INSERT INTO TASKS (topic_id, difficulty, task_type, task_text, choices, correct_answer) VALUES (?, ?, ?, ?, ?, ?)',
+        [topicId, difficulty, taskType, taskText, choices, correctAnswer]
     );
     res.status(201).json({ message: 'Task created', taskId: result.lastID });
   } catch (error) {
@@ -129,7 +158,7 @@ router.get('/problems', authenticateToken, async (req, res) => {
                 if (successRate >= 0.85) {
                     unlockedDifficulty = nextDiff; // Unlock the next level
                 } else {
-                    break; // Stop if the current level isn't passed
+                    break; // Stop if the current level isnt passed
                 }
             } else {
                 break; // Stop if no attempts have been made on the current level

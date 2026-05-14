@@ -41,29 +41,45 @@ function generateSampleTasks(topicName) {
     difficulties.forEach((diff, index) => {
         let taskText = "";
         let correctAnswer = "";
+        let taskType = 'TEXT_ANSWER';
+        let choices = null;
         
         const a = Math.floor(diff) * 3;
         const b = index + 2;
 
-        if (topicName.includes("Törtek")) {
-            taskText = `\\frac{${a}}{${b}} + \\frac{1}{${b}}`;
-            correctAnswer = `${a + 1}/${b}`;
-        } else if (topicName.includes("Nyitot") || topicName.includes("egyenlet")) {
-            taskText = `${a}x + ${b} = ${a * 2 + b}`;
-            correctAnswer = `2`;
-        } else if (topicName.includes("Szorzás") || topicName.includes("osztás")) {
-            taskText = `${a} \\times ${b}`;
-            correctAnswer = `${a * b}`;
+        // Introduce choice questions periodically
+        if (index % 3 === 1) {
+             taskType = 'SINGLE_CHOICE';
+             taskText = `${a} + ${b}`;
+             choices = JSON.stringify([`${a + b + 1}`, `${a + b}`, `${a + b - 1}`, `${a * b}`]);
+             correctAnswer = `[1]`; // Index of correct choice (which is stringified array)
+        } else if (index % 3 === 2) {
+             taskType = 'MULTIPLE_CHOICE';
+             taskText = `Melyik egyenlő evvel: ${a * b}?`;
+             choices = JSON.stringify([`${a} \\times ${b}`, `${a + b}`, `${b} \\times ${a}`, `${a / b}`]);
+             correctAnswer = JSON.stringify([0, 2]); // Indices of correct choices
         } else {
-            taskText = `${a} + ${b}`;
-            correctAnswer = `${a + b}`;
+            if (topicName.includes("Törtek")) {
+                taskText = `\\frac{${a}}{${b}} + \\frac{1}{${b}}`;
+                correctAnswer = `${a + 1}/${b}`;
+            } else if (topicName.includes("Nyitot") || topicName.includes("egyenlet")) {
+                taskText = `${a}x + ${b} = ${a * 2 + b}`;
+                correctAnswer = `2`;
+            } else if (topicName.includes("Szorzás") || topicName.includes("osztás")) {
+                taskText = `${a} \\times ${b}`;
+                correctAnswer = `${a * b}`;
+            } else {
+                taskText = `${a} + ${b}`;
+                correctAnswer = `${a + b}`;
+            }
         }
 
         tasks.push({
             topicName: topicName,
             difficulty: diff,
-            taskType: 'TEXT_ANSWER',
+            taskType: taskType,
             taskText: taskText,
+            choices: choices,
             correctAnswer: correctAnswer
         });
     });
@@ -125,8 +141,8 @@ async function seed() {
            if (topicRow) {
                const topicId = topicRow.topic_id;
                await db.run(
-                   'INSERT INTO TASKS (topic_id, difficulty, task_type, task_text, correct_answer) VALUES (?, ?, ?, ?, ?)',
-                   [topicId, task.difficulty, task.taskType, task.taskText, task.correctAnswer]
+                   'INSERT INTO TASKS (topic_id, difficulty, task_type, task_text, choices, correct_answer) VALUES (?, ?, ?, ?, ?, ?)',
+                   [topicId, task.difficulty, task.taskType, task.taskText, task.choices, task.correctAnswer]
                );
            }
         } catch(err) {

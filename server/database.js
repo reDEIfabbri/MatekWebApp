@@ -15,6 +15,7 @@ async function initializeDatabase() {
       user_id INTEGER PRIMARY KEY AUTOINCREMENT,
       email TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
+      username TEXT,
       role TEXT CHECK(role IN ('STUDENT', 'ADMIN')) NOT NULL
     );
 
@@ -65,6 +66,16 @@ async function initializeDatabase() {
       FOREIGN KEY (user_id) REFERENCES USERS(user_id)
     );
   `);
+
+  // Migration: Add username column if the table was created before it was added to the schema
+  try {
+    await db.exec(`ALTER TABLE USERS ADD COLUMN username TEXT;`);
+    console.log('Migrated USERS table: added username column.');
+  } catch (err) {
+    if (!err.message.includes('duplicate column name')) {
+      console.error('Migration error:', err.message);
+    }
+  }
 
   // Migration: Add task_type column if the table was created before it was added to the schema
   try {

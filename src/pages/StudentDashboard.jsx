@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import MathLiveEditor from '../components/MathLiveEditor';
-import { Heart, Flame, CheckCircle, Target } from 'lucide-react';
+import { Heart, Flame, CheckCircle, Target, User } from 'lucide-react';
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -10,13 +13,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import 'mathlive';
 
 /**
  * @typedef {Object} Problem
  * @property {number} task_id
+ * @property {string} task_type
  * @property {string} task_text
+ * @property {string} choices
  * @property {number} topic_id
  */
 
@@ -48,17 +54,72 @@ const StudentDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState(null);
   
+  const [username, setUsername] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [updateStatus, setUpdateStatus] = useState('');
+
   const mathFieldRef = useRef(null);
 
   useEffect(() => {
-    Promise.all([fetchTopics(), fetchProgress()]).catch(console.error);
+    Promise.all([fetchTopics(), fetchProgress(), fetchUserInfo()]).catch(console.error);
   }, []);
   
   useEffect(() => {
-      if (mathFieldRef.current && problems.length > 0) {
-          mathFieldRef.current.value = problems[currentProblemIndex]?.task_text || '';
+      if (mathFieldRef.current && problems.length > 0 && problems[currentProblemIndex]) {
+          mathFieldRef.current.value = problems[currentProblemIndex].task_text || '';
       }
+      setUserAnswer(''); // reset answer when problem changes
+      setFeedback(null);
   }, [currentProblemIndex, problems]);
+
+  const fetchUserInfo = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const userId = localStorage.getItem('userId');
+        if(!userId) return;
+
+        const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+            const data = await response.json();
+            setUsername(data.username || '');
+            setNewUsername(data.username || '');
+        }
+      } catch(error) {
+          console.error("Error fetching user info:", error);
+      }
+  }
+
+  const handleUpdateUsername = async () => {
+      setUpdateStatus('Updating...');
+      try {
+        const token = localStorage.getItem('token');
+        const userId = localStorage.getItem('userId');
+        if(!userId) return;
+
+        const response = await fetch(`http://localhost:5000/api/users/${userId}`, {
+            method: 'PUT',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username: newUsername })
+        });
+        
+        if (response.ok) {
+            setUsername(newUsername);
+            setUpdateStatus('Username updated successfully!');
+            setTimeout(() => setUpdateStatus(''), 3000);
+        } else {
+             setUpdateStatus('Failed to update username.');
+        }
+      } catch(error) {
+          console.error("Error updating user info:", error);
+          setUpdateStatus('Error connecting to server.');
+      }
+  }
+
 
   const fetchTopics = async () => {
     try {
@@ -132,6 +193,18 @@ const StudentDashboard = () => {
         const token = localStorage.getItem('token');
         const currentProblem = problems[currentProblemIndex];
         
+        // For choices, we might need to stringify array if multiple choice
+        let finalAnswer = userAnswer;
+        if (currentProblem.task_type === 'MULTIPLE_CHOICE') {
+             // Let's ensure it's sorted so JSON string matches server side
+             try {
+                let parsed = JSON.parse(userAnswer);
+                if (Array.isArray(parsed)) {
+                    finalAnswer = JSON.stringify(parsed.sort());
+                }
+             } catch(e) {}
+        }
+
         const response = await fetch('http://localhost:5000/api/problems/submit', {
             method: 'POST',
             headers: {
@@ -140,7 +213,7 @@ const StudentDashboard = () => {
             },
             body: JSON.stringify({
                 taskId: currentProblem?.task_id,
-                answer: userAnswer
+                answer: finalAnswer
             })
         });
 
@@ -172,14 +245,46 @@ const StudentDashboard = () => {
     window.location.href = '/';
   };
 
+  const handleCheckboxChange = (index) => {
+     let currentSelection = [];
+     try {
+         currentSelection = JSON.parse(userAnswer || '[]');
+     } catch (e) {}
+
+     if (!Array.isArray(currentSelection)) currentSelection = [];
+
+     if (currentSelection.includes(index)) {
+         currentSelection = currentSelection.filter(i => i !== index);
+     } else {
+         currentSelection.push(index);
+     }
+     setUserAnswer(JSON.stringify(currentSelection));
+  };
+
+
   const currentProblem = problems[currentProblemIndex];
+  let parsedChoices = [];
+  if (currentProblem && currentProblem.choices) {
+      try {
+          parsedChoices = JSON.parse(currentProblem.choices);
+      } catch(e) {
+          console.error("Failed to parse choices", e);
+      }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
         
         <div className="flex justify-between items-center bg-white rounded-lg shadow-sm p-4 px-6 border border-gray-100">
-            <h1 className="text-2xl font-bold text-gray-800">Student Dashboard</h1>
+            <div className="flex items-center space-x-3">
+                <div className="bg-blue-100 p-2 rounded-full">
+                     <User className="w-5 h-5 text-blue-600" />
+                </div>
+                <h1 className="text-xl font-bold text-gray-800">
+                    Welcome, {username || 'Student'}!
+                </h1>
+            </div>
             
             {progress && (
                 <div className="flex items-center space-x-6">
@@ -247,10 +352,56 @@ const StudentDashboard = () => {
 
                         <div className="space-y-3">
                             <label className="block text-sm font-medium text-gray-700">Your Answer:</label>
-                            <MathLiveEditor 
-                                initialValue={userAnswer} 
-                                onChange={setUserAnswer} 
-                            />
+                            
+                            {(!currentProblem.task_type || currentProblem.task_type === 'TEXT_ANSWER') && (
+                                <MathLiveEditor 
+                                    initialValue={userAnswer} 
+                                    onChange={setUserAnswer} 
+                                />
+                            )}
+
+                            {currentProblem.task_type === 'SINGLE_CHOICE' && (
+                                <RadioGroup 
+                                    value={userAnswer} 
+                                    onValueChange={(val) => setUserAnswer(val)}
+                                    className="space-y-2 mt-4"
+                                >
+                                    {parsedChoices.map((choice, index) => (
+                                        <div key={index} className="flex items-center space-x-3 p-3 border rounded-md bg-gray-50 hover:bg-gray-100 transition-colors">
+                                            <RadioGroupItem value={`[${index}]`} id={`r-${index}`} />
+                                            <Label htmlFor={`r-${index}`} className="flex-1 cursor-pointer w-full">
+                                                <MathLiveEditor initialValue={choice} readOnly={true} />
+                                            </Label>
+                                        </div>
+                                    ))}
+                                </RadioGroup>
+                            )}
+
+                            {currentProblem.task_type === 'MULTIPLE_CHOICE' && (
+                                <div className="space-y-2 mt-4">
+                                    {parsedChoices.map((choice, index) => {
+                                        let isChecked = false;
+                                        try {
+                                            const currentSel = JSON.parse(userAnswer || '[]');
+                                            isChecked = currentSel.includes(index);
+                                        } catch (e) {}
+
+                                        return (
+                                            <div key={index} className="flex items-center space-x-3 p-3 border rounded-md bg-gray-50 hover:bg-gray-100 transition-colors">
+                                                <Checkbox 
+                                                    id={`c-${index}`} 
+                                                    checked={isChecked}
+                                                    onCheckedChange={() => handleCheckboxChange(index)}
+                                                />
+                                                <Label htmlFor={`c-${index}`} className="flex-1 cursor-pointer w-full">
+                                                    <MathLiveEditor initialValue={choice} readOnly={true} />
+                                                </Label>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+
                         </div>
 
                         <div className="flex items-center space-x-4 pt-2">
@@ -328,14 +479,27 @@ const StudentDashboard = () => {
                         <CardDescription>Manage your profile and preferences.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-gray-500 mb-4">Settings functionality coming soon.</p>
                         <div className="space-y-4 max-w-sm">
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Username</label>
-                                <input disabled type="text" className="w-full px-3 py-2 border rounded-md bg-gray-50" placeholder="Student User" />
+                                <Label htmlFor="username">Username</Label>
+                                <Input 
+                                    id="username"
+                                    type="text" 
+                                    value={newUsername}
+                                    onChange={(e) => setNewUsername(e.target.value)}
+                                    placeholder="Enter your username" 
+                                />
                             </div>
+                            {updateStatus && (
+                                <p className={`text-sm ${updateStatus.includes('success') ? 'text-green-600' : 'text-gray-600'}`}>
+                                    {updateStatus}
+                                </p>
+                            )}
                         </div>
                     </CardContent>
+                    <CardFooter>
+                        <Button onClick={handleUpdateUsername}>Save Changes</Button>
+                    </CardFooter>
                 </Card>
             </TabsContent>
 
